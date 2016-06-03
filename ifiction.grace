@@ -38,7 +38,7 @@ def player = object {
         print(message)
     }
     method quit {
-        print "You scored 0 points out of a possible 10,000,000.  You are a complete loser."
+        takeAction "score"
         sys.exit
     }
     method look {

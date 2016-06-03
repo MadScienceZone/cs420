@@ -34,13 +34,19 @@
 //              cause arbitrary actions to be initiated by the player in the game environment
 //
 
+import "unicode" as unicode
 
 def AmbiguousNounError = Exception.refine "ambiguous noun"
 def NoSuchNounError = Exception.refine "no such noun"
+
+def noLastObject = object {
+}
+
 def vocabulary = object {
     var nouns := dictionary []
     var verbs := list []
     var adjectives := dictionary []
+    var lastObject is readable := noLastObject
 
     method dump {
         print "Nouns: {nouns}"
@@ -54,6 +60,7 @@ def vocabulary = object {
         adjectives := dictionary []
     }
 
+    method lastObjectWas    (o)          { lastObject := o }
     method isKnownAdjective (adj:String) { adjectives.containsKey(adj) }
     method isKnownNoun      (n:String)   { nouns.containsKey(n)        }
     method isKnownVerb      (v:String)   { verbs.contains(v)           }
@@ -196,6 +203,7 @@ class moveDirState (direction') {
     }
     method terminate (player) {
         player.moveDirection(direction)
+        vocabulary.lastObjectWas(noLastObject)
     }
 }
 
@@ -211,7 +219,6 @@ To move around, type compass directions such as GO NORTH, GO SOUTH, etc.
 To see your progress, type SCORE.
 To give up entirely, type QUIT.
 Most commands can be abbreviated in reasonably obvious ways.
->> Note: Due to a technical issue, you must type everything in lower-case for now.
 Good Luck!›)
     }
 }
@@ -225,6 +232,7 @@ def lookState = object {
 
     method terminate (player) {
         player.look
+        vocabulary.lastObjectWas(noLastObject)
     }
 }
 
@@ -232,6 +240,14 @@ def examineState = object {
     method accept (word:String) {
         match (word)
             case { "a"|"an"|"the" → state := articleStateForVerb "examine" }
+            case { "it"|"them" ->
+                if (vocabulary.lastObject ≠ noLastObject) then {
+                    state := directObjectState (vocabulary.lastObject) forVerb "examine"
+                }
+                else {
+                    state := rejectStateBecause "I don't know what you're indirectly referring to as “{word}”."
+                }
+            }
             case { _ →
                 if (vocabulary.isKnownAdjective(word)) then { state := adjectiveState (word) forVerb "examine" }
                 elseif (vocabulary.isKnownNoun(word)) then { 
@@ -304,6 +320,14 @@ class prepositionStateForPreposition (prep') forVerb (verb') {
     method accept (word:String) {
         match (word)
             case {"a"|"an"|"the" → state := indirectArticleStateForVerb (verb) andForPreposition (prep)}
+            case { "it"|"them"          -> 
+                if (vocabulary.lastObject ≠ noLastObject) then {
+                    state := indirectObjectState (vocabulary.lastObject) forVerb (verb) andForPreposition (prep)
+                }
+                else {
+                    state := rejectStateBecause "That's a bit vague. I don't know what you mean by “{word}”."
+                }
+            }
             case {_ →
                 if (vocabulary.isKnownAdjective(word)) then { 
                     state := indirectAdjectiveState (word) forVerb (verb) andForPreposition (prep)
@@ -331,6 +355,7 @@ class prepositionStateForPreposition (prep') forVerb (verb') andForObject (dobj'
     method accept (word:String) {
         match (word)
             case {"a"|"an"|"the" → state := indirectArticleStateForVerb (verb) andForPreposition (prep) andForObject (dobj)}
+            case {"it"|"them" -> state := rejectStateBecause "I think pronouns such as “{word}” are best used for direct objects in the sentence, if it's all the same to you."}
             case {_ → 
                 if (vocabulary.isKnownAdjective(word)) then { 
                     state := indirectAdjectiveState (word) forVerb (verb) andForPreposition (prep) andForObject (dobj)
@@ -368,6 +393,7 @@ class indirectAdjectiveState (adj') forVerb (verb') andForPreposition (prep') an
         try { 
             state := indirectObjectState (vocabulary.resolveAdjectiveToObject (adj)) forVerb (verb) andForPreposition (prep) andForObject (dobj)
             state.terminate(player)
+            vocabulary.lastObjectWas(dobj)
         }
             catch { e → player.complain(e) }
     }
@@ -383,12 +409,15 @@ class indirectAdjectiveState (adj') forVerb (verb') andForPreposition (prep') {
                 catch {e → state := rejectStateBecause (e)}
         }
         else { state := rejectStateBecause "I'm not really sure what object you're trying to {verb} {prep}." }
+
     }
 
     method terminate (player) {
         try { 
-            state := indirectObjectState (vocabulary.resolveAdjectiveToObject (adj)) forVerb (verb) andForPreposition (prep)
+            var dobj := vocabulary.resolveAdjectiveToObject(adj)
+            state := indirectObjectState (dobj) forVerb (verb) andForPreposition (prep)
             state.terminate(player)
+            vocabulary.lastObjectWas(dobj)
         }
             catch { e → player.complain(e) }
     }
@@ -406,6 +435,7 @@ class indirectObjectState (iobj') forVerb (verb') andForPreposition (prep') andF
 
     method terminate (player) {
         player.takeAction (verb) on (dobj) indirect (prep) with (iobj)
+        vocabulary.lastObjectWas(dobj)
     }
 }
         
@@ -420,6 +450,7 @@ class indirectObjectState (iobj') forVerb (verb') andForPreposition (prep') {
 
     method terminate (player) {
         player.takeAction (verb) indirect (prep) with (iobj)
+        vocabulary.lastObjectWas(iobj)
     }
 }
         
@@ -443,8 +474,10 @@ class adjectiveState (adj') forVerb (verb') {
     }
     method terminate (player) {
         try { 
-            state := directObjectState (vocabulary.resolveAdjectiveToObject (adj)) forVerb (verb) 
+            var dobj := vocabulary.resolveAdjectiveToObject(adj)
+            state := directObjectState (dobj) forVerb (verb) 
             state.terminate(player)
+            vocabulary.lastObjectWas(dobj)
         }
             catch { e → player.complain(e) }
     }
@@ -460,6 +493,7 @@ class directObjectState (theObject') forVerb (verb') {
     }
     method terminate (player) {
         player.takeAction (verb) on (theObject)
+        vocabulary.lastObjectWas(theObject)
     }
 }
 
@@ -479,6 +513,14 @@ class verbStateForVerb (verb') {
         match (word) 
             case { "a"|"an"|"the"       → state := articleStateForVerb (verb) }
             case { "with"|"onto"|"into" → state := prepositionStateForPreposition (word) forVerb (verb) }
+            case { "it"|"them"          -> 
+                if (vocabulary.lastObject ≠ noLastObject) then {
+                    state := directObjectState (vocabulary.lastObject) forVerb (verb)
+                }
+                else {
+                    state := rejectStateBecause "That's a bit vague. I don't know what you mean by “{word}”."
+                }
+            }
             case { _ →
                 if (vocabulary.isKnownAdjective(word)) then { state := adjectiveState (word) forVerb (verb) }
                 elseif (vocabulary.isKnownNoun(word)) then { 
@@ -490,6 +532,7 @@ class verbStateForVerb (verb') {
     }
     method terminate (player) {
         player.takeAction(verb)
+        vocabulary.lastObjectWas(noLastObject)
     }
 }
 
@@ -535,8 +578,21 @@ method removeLeading (n) charactersFrom (in:String) {
     out
 }
 
+method asLower (s:String) {
+    var newValue := ""
+    for (1..(s.size)) do { i ->
+        if ((s[i].ord ≥ "A".ord) && (s[i].ord ≤ "Z".ord)) then {
+            newValue := newValue ++ (unicode.create(s[i].ord + 32))
+        }
+        else {
+            newValue := newValue ++ s[i]
+        }
+    }
+    newValue
+}
+
 method parse (input:String) forPlayer (player) {
-    var inputRemaining := input
+    var inputRemaining := asLower(input)
 
     while {inputRemaining.size > 0} do {
         inputRemaining := trimLeadingSpace(inputRemaining)

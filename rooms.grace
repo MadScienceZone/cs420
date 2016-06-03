@@ -56,7 +56,14 @@ def lobby = object {
 spared, from the marble floor tiles to the crystal chandeliers suspended from
 the ceiling.
 There is an open door to the east, leading to a small room.›
-    var contents := [things.floorTiles, things.chandeliers, things.ceiling, things.walls]
+    var contents := [
+        things.floorTiles, 
+        things.chandeliers, 
+        things.ceiling, 
+        things.walls, 
+        things.leaflet,
+        things.suctionCups
+    ]
 
     method destinationFrom (direction) {
         match (direction)
