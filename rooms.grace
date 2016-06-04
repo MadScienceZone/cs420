@@ -1,8 +1,13 @@
 // vi:set ai sm nu ts=4 sw=4 expandtab:
 //
-// Interactive Fiction demo project 
-// Steve Willoughby, CS 420, Portland State University, Spring 2016
-// Room definitions
+// Interactive Fiction demo program -- room definitions
+// CS 420 term project to demonstrate an object-oriented parser design
+// Steve Willoughby, Portland State University, Spring 2016
+//
+// ©2016 Steven L. Willoughby, All Rights Reserved. May be distributed and used
+// under the terms of the Simplified (2-clause) BSD open-source license (See the
+// LICENSE file for details.)
+//
 //
 import "formatting" as fmt
 import "things"     as things

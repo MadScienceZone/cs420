@@ -1,4 +1,13 @@
 // vi:set ai sm nu ts=4 sw=4 expandtab:
+//
+// Interactive Fiction demo program -- main module (RUN THIS)
+// CS 420 term project to demonstrate an object-oriented parser design
+// Steve Willoughby, Portland State University, Spring 2016
+//
+// ©2016 Steven L. Willoughby, All Rights Reserved. May be distributed and used
+// under the terms of the Simplified (2-clause) BSD open-source license (See the
+// LICENSE file for details.)
+//
 
 import "sys"        as sys
 import "io"         as io
