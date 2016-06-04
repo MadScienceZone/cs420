@@ -6,38 +6,82 @@
 // Input Parser
 //
 // parse <input> forPlayer <player>
-//      This is the main entry point for parsing user input.  We have a full string
-//      of input on input.  The result is that the message is interpreted and based
+//      This is the main entry point for parsing user input.  We take a full string
+//      of input as <input>.  The result is that the message is interpreted and based
 //      on its semantic meaning, appropriate methods in <player> are invoked to 
 //      carry out what the human is asking for <player> to do.  The possibilities
 //      are:
-//          <player>.moveInDirection(<direction>)
+//          <player>.complain(<message>)
+//              the sentence couldn't be understood for reasons explained in <message>
+//
+//          <player>.moveDirection(<direction>)
 //              the player is to move in a direction, which is a normalized string
 //              "north", "south", "east", "west".
 //
-//          <player>.complain(<message>)
-//              the sentence couldn't be understood for reasons explained in <message>
-// dictionary 
-//          <player>.quit
-//              terminate playing the game
-//
 //          <player>.look
 //              print a description of the surroundings of the player
+//
+//          <player>.quit
+//              terminate playing the game
 //
 //          <player>.inventory
 //              print a list of what's in the player's possession
 //
 //          <player>.takeAction <verb>
 //          <player>.takeAction <verb> on <obj>
-//          <player>.takeAction <verb> on <obj> indirect <preposition> with <obj>
 //          <player>.takeAction <verb> indirect <preposition> with <obj>
+//          <player>.takeAction <verb> on <obj> indirect <preposition> with <obj>
 //              cause arbitrary actions to be initiated by the player in the game environment
+//
+// Some standard vocabulary is built-in here, as described below.  The rest is
+// dynamically added to the parser as the player moves through the game, adapting
+// to his/her surroundings.  Note that in some cases alternative words are normalized
+// to a given standard verb to simpify how objects react to the verbs.
+//
+//  A
+//  AN
+//  THE
+//  DROP   
+//  EXAMINE
+//  GET                (→ TAKE)
+//  GO
+//  HELP
+//  IN
+//  INTO
+//  INVENTORY
+//  IT
+//  LOOK
+//  LOOK AT            (→ EXAMINE)
+//  MOVE
+//  OFF
+//  ON
+//  ONTO
+//  PICK               
+//  PICK UP            (→ TAKE)
+//  PICK {IT|THEM} UP  (→ TAKE {IT|THEM})
+//  PUT                
+//  PUT DOWN           (→ DROP)
+//  PUT {IT|THEM} DOWN (→ DROP {IT|THEM})
+//  QUIT
+//  SCORE
+//  TAKE
+//  THE
+//  THEM
+//  TO
+//  TOWARD
+//  WITH
+//
+// Abbreviations allowed:
+//      EXA for EXAMINE
+//      I for INVENTORY
+//      N, S, E, W for NORTH, SOUTH, EAST, WEST
 //
 
 import "unicode" as unicode
 
 def AmbiguousNounError = Exception.refine "ambiguous noun"
 def NoSuchNounError = Exception.refine "no such noun"
+def ActionNotResolved = Exception.refine "action not resolved"
 
 def noLastObject = object {
 }
@@ -47,12 +91,6 @@ def vocabulary = object {
     var verbs := list []
     var adjectives := dictionary []
     var lastObject is readable := noLastObject
-
-    method dump {
-        print "Nouns: {nouns}"
-        print "Verbs: {verbs}"
-        print "Adjectives: {adjectives}"
-    }
 
     method clear {
         nouns := dictionary []
@@ -124,19 +162,100 @@ def vocabulary = object {
     }
 }
 
+def pickState = object {
+    method accept (word:String) {
+        match (word)
+            case {"up"        → state := verbStateForVerb "take" }
+            case {"it"|"them" → 
+                if (vocabulary.lastObject ≠ noLastObject) then {
+                    state := pickItState
+                }
+                else {
+                    state := rejectStateBecause "I don't know what you're indirectly referring to as “{word}”."
+                }
+            }
+            case {_ →
+                state := verbStateForVerb "pick"    // not "pick up"... must be a verb "pick"
+                state.accept (word)
+            }
+    }
+
+    method terminate (player) {
+        state := rejectStateBecause "Pick what?"
+    }
+}
+
+def pickItState = object {
+    method accept (word:String) {
+        if (word == "up") then { // pick it up
+            state := directObjectState (vocabulary.lastObject) forVerb "take"
+        }
+        else { // pick it ... (something)
+            state := rejectStateBecause "I'm not sure what you mean, I don't understand “pick it” in that context."
+        }
+    }
+
+    method terminate (player) {
+        state := rejectStateBecause "I don't understand. I think there's more you wanted to put at the end of that sentence."
+    }
+}
+            
+
+def putState = object {
+    method accept (word:String) {
+        match (word)
+            case {"down"      → state := verbStateForVerb "drop" }
+            case {"it"|"them" →
+                if (vocabulary.lastObject ≠ noLastObject) then {
+                    state := putItState
+                }
+                else {
+                    state := rejectStateBecause "I don't know what you're indirectly referring to as “{word}”."
+                }
+            }
+            case {_ →
+                state := verbStateForVerb "put"  // not "put down"... must be a verb "put"
+                state.accept (word)
+            }
+    }
+
+    method terminate (player) {
+        state := rejectStateBecause "Put what? Where?"
+    }
+}
+
+def putItState = object {
+    method accept (word:String) {
+        if (word == "down") then { // put it down
+            state := directObjectState (vocabulary.lastObject) forVerb "drop"
+        }
+        else { // put it ... (something)
+            state := rejectStateBecause "I don't know what you mean by using “put it” in that context."
+        }
+    }
+
+    method terminate (player) {
+        state := rejectStateBecause "I don't understand. I think there's more you wanted to put at the end of that sentence."
+    }
+}
+
 def startState = object {
     method accept (word:String) {
         match (word)
-            case { "examine"       → state := examineState }
+            case { "exa"|"examine" → state := verbStateForVerb "examine" }
             case { "help"          → state := helpState }
             case { "look"          → state := lookState }
             case { "quit"          → state := quitState }
+            case { "pick"          → state := pickState }
+            case { "take"|"get"    → state := verbStateForVerb "take" }
+            case { "put"           → state := putState }
+            case { "drop"          → state := verbStateForVerb "drop" }
             case { "go"|"move"     → state := moveState }
-            case { "n"|"north"     → state := moveDirState ("north") }
-            case { "s"|"south"     → state := moveDirState ("south") }
-            case { "e"|"east"      → state := moveDirState ("east")  }
-            case { "w"|"west"      → state := moveDirState ("west")  }
-            case { "i"|"inventory" → state := verbStateForVerb ("inventory") }
+            case { "n"|"north"     → state := moveDirState "north" }
+            case { "s"|"south"     → state := moveDirState "south" }
+            case { "e"|"east"      → state := moveDirState "east"  }
+            case { "w"|"west"      → state := moveDirState "west"  }
+            case { "i"|"inventory" → state := verbStateForVerb "inventory" }
             case { "score"         → state := verbStateForVerb (word) }
             case { _ → 
                 if (vocabulary.isKnownVerb(word)) then {
@@ -226,39 +345,13 @@ Good Luck!›)
 def lookState = object {
     method accept (word:String) {
         match (word) 
-            case { "at" → state := examineState }
+            case { "at" → state := verbStateForVerb "examine" }
             case { _    → state := rejectStateBecause "Look AT something, or just LOOK to see your surroundings." }
     }
 
     method terminate (player) {
         player.look
         vocabulary.lastObjectWas(noLastObject)
-    }
-}
-
-def examineState = object {
-    method accept (word:String) {
-        match (word)
-            case { "a"|"an"|"the" → state := articleStateForVerb "examine" }
-            case { "it"|"them" ->
-                if (vocabulary.lastObject ≠ noLastObject) then {
-                    state := directObjectState (vocabulary.lastObject) forVerb "examine"
-                }
-                else {
-                    state := rejectStateBecause "I don't know what you're indirectly referring to as “{word}”."
-                }
-            }
-            case { _ →
-                if (vocabulary.isKnownAdjective(word)) then { state := adjectiveState (word) forVerb "examine" }
-                elseif (vocabulary.isKnownNoun(word)) then { 
-                    try { state := directObjectState (vocabulary.resolveNounToObject(word)) forVerb "examine" }
-                        catch { e → state := rejectStateBecause (e) }
-                }
-                else { state := rejectStateBecause "I'm not really sure what object you're referring to here." }
-            }
-    }
-    method terminate (player) {
-        player.complain("What do you want to look at?")
     }
 }
 
@@ -320,7 +413,7 @@ class prepositionStateForPreposition (prep') forVerb (verb') {
     method accept (word:String) {
         match (word)
             case {"a"|"an"|"the" → state := indirectArticleStateForVerb (verb) andForPreposition (prep)}
-            case { "it"|"them"          -> 
+            case { "it"|"them"          → 
                 if (vocabulary.lastObject ≠ noLastObject) then {
                     state := indirectObjectState (vocabulary.lastObject) forVerb (verb) andForPreposition (prep)
                 }
@@ -355,7 +448,7 @@ class prepositionStateForPreposition (prep') forVerb (verb') andForObject (dobj'
     method accept (word:String) {
         match (word)
             case {"a"|"an"|"the" → state := indirectArticleStateForVerb (verb) andForPreposition (prep) andForObject (dobj)}
-            case {"it"|"them" -> state := rejectStateBecause "I think pronouns such as “{word}” are best used for direct objects in the sentence, if it's all the same to you."}
+            case {"it"|"them" → state := rejectStateBecause "I think pronouns such as “{word}” are best used for direct objects in the sentence, if it's all the same to you."}
             case {_ → 
                 if (vocabulary.isKnownAdjective(word)) then { 
                     state := indirectAdjectiveState (word) forVerb (verb) andForPreposition (prep) andForObject (dobj)
@@ -460,7 +553,7 @@ class adjectiveState (adj') forVerb (verb') {
     def adj = adj'
     method accept (word:String) {
         match (word)
-            case { "with"|"onto"|"into" → 
+            case { "with"|"on"|"off"|"onto"|"into"|"in" → 
                 try { state := prepositionStateForPreposition (word) forVerb (verb) andForObject (vocabulary.resolveAdjectiveToObject (adj)) }
                     catch {e → state := rejectStateBecause (e)}
             }
@@ -488,7 +581,7 @@ class directObjectState (theObject') forVerb (verb') {
     def theObject = theObject'
     method accept (word:String) { 
         match (word)
-            case {"with"|"into"|"onto" → state := prepositionStateForPreposition (word) forVerb (verb) andForObject (theObject)}
+            case {"with"|"in"|"into"|"onto"|"on"|"off" → state := prepositionStateForPreposition (word) forVerb (verb) andForObject (theObject)}
             case {_                    → state := rejectStateBecause "You put extra words after the object of your sentence." }
     }
     method terminate (player) {
@@ -512,8 +605,8 @@ class verbStateForVerb (verb') {
     method accept (word:String) {
         match (word) 
             case { "a"|"an"|"the"       → state := articleStateForVerb (verb) }
-            case { "with"|"onto"|"into" → state := prepositionStateForPreposition (word) forVerb (verb) }
-            case { "it"|"them"          -> 
+            case { "with"|"onto"|"in"|"into"|"on"|"off" → state := prepositionStateForPreposition (word) forVerb (verb) }
+            case { "it"|"them"          → 
                 if (vocabulary.lastObject ≠ noLastObject) then {
                     state := directObjectState (vocabulary.lastObject) forVerb (verb)
                 }
@@ -580,7 +673,7 @@ method removeLeading (n) charactersFrom (in:String) {
 
 method asLower (s:String) {
     var newValue := ""
-    for (1..(s.size)) do { i ->
+    for (1..(s.size)) do { i →
         if ((s[i].ord ≥ "A".ord) && (s[i].ord ≤ "Z".ord)) then {
             newValue := newValue ++ (unicode.create(s[i].ord + 32))
         }

@@ -10,9 +10,13 @@ import "things"     as things
 class Room {
     def name = "Non-descript room."
     def description = "Nothing to see here. Move along."
-    def canMoveHere is readable = true
+    method canMoveHere (player) { true }
+    method canLeaveHere (player) { true }
     var visited := false
-    var contents := []
+    var contents := list []
+
+    method acceptObject (obj) { contents.add(obj) }
+    method yieldObject (obj) { contents.remove(obj) }
 
     method updateVocabulary (vocab) {
         for (contents) do { item → item.updateVocabulary(vocab) }
@@ -43,7 +47,7 @@ class Room {
 
 def noExit = object {
     inherit Room
-    method canMoveHere {
+    method canMoveHere (player) {
         print "I don't see any way you can move that direction."
         false
     }
@@ -55,8 +59,8 @@ def lobby = object {
     def description is readable = ‹This is the ostentatious lobby of an old bank building.  No expense has been
 spared, from the marble floor tiles to the crystal chandeliers suspended from
 the ceiling.
-There is an open door to the east, leading to a small room.›
-    var contents := [
+There is an open doorway to the east, leading to a small room.›
+    var contents := list [
         things.floorTiles, 
         things.chandeliers, 
         things.ceiling, 
@@ -81,7 +85,11 @@ lit room to the north, while to the east there is a doorway to a dim, shadowy
 chamber beyond.
 There is a sign here, engraved on the wall.›
 
-    var contents := [things.anteroomSign, things.anteroomWalls]
+    var contents := list [
+        things.anteroomSign, 
+        things.anteroomWalls,
+        things.ceiling
+    ]
 
     method destinationFrom (direction) {
         match (direction)
@@ -94,8 +102,79 @@ There is a sign here, engraved on the wall.›
 
 def vault = object {
     inherit Room
+    def name        is readable = "Vault"
+    def description is readable = ‹This dimly-lit chamber is a perfect cube 20' on each side. Countless lock
+boxes are embedded into the walls here.
+To the west is the exit back to the anteroom.›
+    var contents := list [
+        things.smallRock, 
+        things.largeRock, 
+        things.lockBoxes
+    ]
+
+    method destinationFrom (direction) {
+        match (direction)
+            case { ‹west› → anteroom }
+            case { _      → noExit   }
+    }
+
+    method canMoveHere (player) {
+        if (player.isCarrying(things.suctionCups).not) then {
+            print "You run smack into an invisible wall as you try to enter."
+            print "The wall feels smooth as glass to your touch."
+            print "(So THAT's what an invisible wall looks like!)"
+            false
+        }
+        elseif (things.suctionCups.worn.not) then { 
+            print "You run smack into an invisible wall as you try to enter."
+            print "You have a nagging sense that something you're carrying would help."
+            false
+        }
+        else {
+            print ‹As you encounter the invisible wall, the suction cups on your hands stick to
+its smooth, glass-like surface.  Experimenting a little, you find you can use
+them to climb up the wall, which you discover does not extend all the way to
+the ceiling.  You climb up, over, and down the other side, into the vault.›
+            player.addToScore 5 for "scaling the invisible wall"
+            true
+        }
+    }
+
+    method canLeaveHere (player) {
+        if (player.isCarrying(things.suctionCups).not) then {
+            print "You run smack into an invisible wall as you try to leave."
+            false
+        }
+        elseif (things.suctionCups.worn.not) then { 
+            print "You run smack into an invisible wall as you try to leave."
+            print "How did you get IN here, anyway?"
+            false
+        }
+        else {
+            print ‹You climb back over the wall again, using the suction cups.›
+            true
+        }
+    }
 }
 
 def deposit = object {
     inherit Room
+
+    def name        is readable = "Deposit Room"
+    def description is readable = ‹This brightly illuminated room is featureless except for a pair of holes,
+one large and the other small, which bank patrons use to deposit their
+valuable rocks for secure storage.
+To the south is the exit back to the anteroom.›
+    var contents := list [
+        things.largeHole, 
+        things.smallHole,
+        things.walls,
+        things.ceiling
+    ]
+
+    method destinationFrom (direction) {
+        match (direction)
+            case { ‹south› → anteroom }
+            case { _       → noExit   }
+    }
 }
