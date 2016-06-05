@@ -102,6 +102,12 @@ def vocabulary = object {
         adjectives := dictionary []
     }
 
+    method dump {
+        print "Vocab Nouns: {nouns}"
+        print "Vocab Verbs: {verbs}"
+        print "Vocab Adjs:  {adjectives}"
+    }
+
     method lastObjectWas    (o)          { lastObject := o }
     method isKnownAdjective (adj:String) { adjectives.containsKey(adj) }
     method isKnownNoun      (n:String)   { nouns.containsKey(n)        }
