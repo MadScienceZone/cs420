@@ -87,8 +87,7 @@ def AmbiguousNounError = Exception.refine "ambiguous noun"
 def NoSuchNounError = Exception.refine "no such noun"
 def ActionNotResolved = Exception.refine "action not resolved"
 
-def noLastObject = object {
-}
+def noLastObject = Singleton.new
 
 def vocabulary = object {
     var nouns := dictionary []
@@ -654,8 +653,8 @@ method trimLeadingSpace (in:String) {
     var out := ""
     var leading := true
     for (1..(in.size)) do { i →
-        if (leading.not || (in[i] ≠ " ")) then {
-            out := out ++ in[i]
+        if (leading.not || (in.at(i) ≠ " ")) then {
+            out := out ++ in.at(i)
             leading := false
         }
     }
@@ -665,10 +664,10 @@ method trimLeadingSpace (in:String) {
 method breakOutNextWord (in:String) {
     var out := ""
     for (1..(in.size)) do { i →
-        if (in[i] == " ") then {
+        if (in.at(i) == " ") then {
             return out
         }
-        out := out ++ in[i]
+        out := out ++ in.at(i)
     }
     out
 }
@@ -676,7 +675,7 @@ method breakOutNextWord (in:String) {
 method removeLeading (n) charactersFrom (in:String) {
     var out := ""
     for ((n+1)..(in.size)) do { i →
-        out := out ++ in[i]
+        out := out ++ in.at(i)
     }
     out
 }
@@ -684,11 +683,11 @@ method removeLeading (n) charactersFrom (in:String) {
 method asLower (s:String) {
     var newValue := ""
     for (1..(s.size)) do { i →
-        if ((s[i].ord ≥ "A".ord) && (s[i].ord ≤ "Z".ord)) then {
-            newValue := newValue ++ (unicode.create(s[i].ord + 32))
+        if ((s.at(i).ord ≥ "A".ord) && (s.at(i).ord ≤ "Z".ord)) then {
+            newValue := newValue ++ (unicode.create(s.at(i).ord + 32))
         }
         else {
-            newValue := newValue ++ s[i]
+            newValue := newValue ++ s.at(i)
         }
     }
     newValue

@@ -28,7 +28,7 @@ import "people"     as people
 // yourself a real computer (h/t to Scott Adams; see 
 // http://dilbert.com/strip/1995-06-24 ).
 //
-if (((sys.argv.size) > 1) && {(sys.argv[2]) == "-a"}) then {
+if (((sys.argv.size) > 1) && {(sys.argv.at(2)) == "-a"}) then {
     fmt.switchToPlainStyle
 } else {
     print "*** IF YOU CAN READ THIS, you aren't using an ANSI-compatible terminal emulator."
@@ -45,7 +45,7 @@ people.player.moveTo (rooms.lobby)
 
 while {io.input.eof.not} do {
    io.output.write(fmt.style.enter (fmt.boldYellow) with "> ")
-   var userInput := io.input.getline()
+   var userInput := io.input.getline
    io.output.write(fmt.style.exit)
    parser.parse (userInput) forPlayer (people.player)
 }
