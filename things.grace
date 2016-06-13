@@ -25,6 +25,7 @@ class Thing {
     def depositScore is readable = 0
 
     // Return true if ok to move into player's inventory
+    method == (other) { isMe(other) }
     method pickUp { pickUp' }       // because "alias" not yet supported in C minigrace
     method pickUp' { 
         if (isBeingCarried) then {
